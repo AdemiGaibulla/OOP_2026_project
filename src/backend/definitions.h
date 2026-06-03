@@ -4,6 +4,7 @@
 enum MachineState{
     IDLE,
     WORKING,
+    FIXING,
     BROKEN
 };
 
@@ -17,7 +18,8 @@ enum ProductState{
 enum Scenario{
     NORMAL,
     BOTTLENECK,
-    BREAKDOWNS
+    BREAKDOWNS,
+    OVERFLOW_SCENARIO
 };
 
 struct MachineSnap{
@@ -27,9 +29,9 @@ struct MachineSnap{
     double health = 100.0;
     int progress = 0;
     int totalTime  = 0;
-    int queueCount = 0;
     int outputCount = 0;
-    int repairTime = 0;
+    int breakdowns = 0;
+    int lostProducts = 0;
 };
 
 struct ConveyorSnap{
@@ -43,6 +45,7 @@ struct FactoryStats{
     int finished = 0;
     int inProgress = 0;
     int totalBreakdowns = 0;
+    int totalProductLost = 0;
     int currentTick = 0;
 };
 

@@ -5,31 +5,40 @@
 #include <string>
 #include <queue>
 #include <memory>
+#include <random>
 
 
 class Machine : public SimulationObject{
-private:
+protected:
     MachineState state;
     double health;
     int progress;
     int totalTime;
     int outputCount;
-    std::queue<std::unique_ptr<Product>> q;
     int brokenAt = 0;
+    int breakChance;
+    int totalBreakdowns = 0;
+    int lostProducts = 0;
+    std::unique_ptr<Product> currentProduct;
+    std::unique_ptr<Product> finishedProduct = nullptr;
 
     void forceBreak(int currentTick){
-        if(state == BROKEN) return;
+        if(state == BROKEN || state == FIXING) return;
         state = BROKEN;
+        totalBreakdowns++;
         if(health - 30.0 >= 0) health -= 30.0;
         else health = 0;
         brokenAt = currentTick;
+        progress = 0;
+        currentProduct = nullptr;
+        lostProducts++;
     }
 
     void forceRepair(){
         state = IDLE;
         health = 100.0;
-        progress = 0;
         brokenAt = 0;
+        progress = 0;
     }
 
     void tickHealth(){
@@ -39,22 +48,63 @@ private:
     }
 
     void autoRepair(int currentTick){
-        if(state != BROKEN) return;
-        if(currentTick - brokenAt >= 10){
-            state = IDLE;
-            brokenAt = 0;
-        }
+        if(state == BROKEN) state = FIXING;
+        if(currentTick - brokenAt >= 10) forceRepair();
+    }
 
+    int getRandomValue() {
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        static std::uniform_int_distribution<> dist(0, 100);
+        return dist(gen);
     }
 
 public:
-    Machine(int i, std::string n, int totalT) : SimulationObject(i,n), state(IDLE), health(100), progress(0), totalTime(totalT), outputCount(0), brokenAt(0) {}
-    virtual ~Machine() {}
+    Machine(int i, std::string n, int totalT, int breakCh) : SimulationObject(i,n), state(IDLE), health(100), progress(0), totalTime(totalT), outputCount(0), brokenAt(0), breakChance(breakCh) {}
+    virtual ~Machine() = 0;
+    virtual void changeProductState(Product* p) = 0;
 
-    virtual void update(int tick) = 0;
-    virtual std::string getInfo() const = 0;
+    bool receive(std::unique_ptr<Product> p){
+        if(state != IDLE) return false;
+        currentProduct = std::move(p);
+        state = WORKING;
+        return true;
+    }
 
-    MachineSnap getSnapshot(int currentTick) const{
+    void update(int tick) override{
+        if(state == BROKEN || state == FIXING){
+            if(tick - brokenAt >= 5) autoRepair(tick);
+        }
+        else if(state == IDLE){
+            progress = 0;
+        }
+        else if(state == WORKING){
+            tickHealth();
+            progress++;
+
+            if(getRandomValue() < breakChance){
+                forceBreak(tick);
+                return;
+            }
+            
+            if(progress >= totalTime){
+                changeProductState(currentProduct.get());
+                finishedProduct = std::move(currentProduct);
+                outputCount++;
+
+                if(next != nullptr){
+                    if(!next->receive(std::move(finishedProduct))){
+                        lostProducts++;
+                    }
+                }
+                finishedProduct = nullptr;
+                progress = 0;
+                state = IDLE;
+            }
+        }
+    }
+
+    MachineSnap getSnapshot() const{
         MachineSnap ms;
         ms.id  = id;
         ms.name = name;
@@ -62,29 +112,59 @@ public:
         ms.health = health;
         ms.progress = progress;
         ms.totalTime = totalTime;
-        ms.queueCount = q.size();
         ms.outputCount = outputCount;
-        if(state == BROKEN) ms.repairTime = 7 - (currentTick - brokenAt);
-        else ms.repairTime = 0;
+        ms.breakdowns = totalBreakdowns;
+        ms.lostProducts = lostProducts;
         return ms;
     }
 
     void applyCmd(MachineCmd& cmd, int currentTick){
         if(cmd.id != id) return;
         if(cmd.forceBreak) forceBreak(currentTick);
-        if(cmd.forceRepair) forceRepair();
+        if (cmd.forceRepair && (state == BROKEN || state == FIXING)) forceRepair();
     }
 
+    void setBreakChance(int chance) { breakChance = chance; }
+    void setTotalTime(int time) { totalTime = time; }
 };
 
-class Shape : public Machine{
+inline Machine::~Machine() {}
 
+class Shape : public Machine{
+    private:
+    void changeProductState(Product* p) override{
+        if(p) p->setState(SHAPED);
+    }
+    public:
+    Shape() : Machine(1, "Shape", 3, 1) {}
+
+    void update(int tick) override {
+        Machine::update(tick);
+    }
 };
 
 class Fryer : public Machine{
+    private:
+    void changeProductState(Product* p) override{
+        if(p) p->setState(FRIED);
+    }
+    public:
+    Fryer() : Machine(2, "Fryer", 5, 2) {}
 
+    void update(int tick) override {
+        Machine::update(tick);
+    }
 };
 
 class Glazer : public Machine{
+    private:
+    void changeProductState(Product* p) override{
+        if(p) p->setState(GLAZED);
+    }
+    public:
+    Glazer() : Machine(3, "Glazer", 4, 1) {}
 
+    void update(int tick) override {
+        Machine::update(tick);
+    }
 };
