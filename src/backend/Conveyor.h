@@ -6,8 +6,9 @@
 
 class Conveyor : public SimulationObject{
     private:
-    std::deque<std::unique_ptr<Product>> conveyor_q;
+    std::deque<std::shared_ptr<Product>> conveyor_q;
     int capacity;
+    std::vector<std::string> newEvents;
 
     public:
     Conveyor(int i, std::string n, int c) : SimulationObject(i, n), capacity(c) {}
@@ -15,28 +16,31 @@ class Conveyor : public SimulationObject{
     void update(int tick) override {
         if(conveyor_q.empty()) return;
 
-        auto p =  std::move(conveyor_q.front());
-        conveyor_q.pop_front();
-
-        if (!(next->receive(std::move(p)))) {
-            conveyor_q.push_front(std::move(p));
+        if ((next->receive(conveyor_q.front()))) {
+            conveyor_q.pop_front();
         }
     }
 
-    bool receive(std::unique_ptr<Product> p){
+    bool receive(std::shared_ptr<Product> p){
         if(capacity > conveyor_q.size()){
-            conveyor_q.push_back(std::move(p));
+            conveyor_q.push_back(p);
             return true;
         }
+        newEvents.push_back("Overflow at");
         return false;
     }
 
-    ConveyorSnap getSnapshot() const{
+    ConveyorSnap getSnapshot(){
         ConveyorSnap cs;
         cs.id = id;
         cs.name = name;
         cs.load = conveyor_q.size();
         cs.totalCapacity = capacity;
+        cs.events = newEvents;
         return cs;
+    }
+
+    void clearEvents(){
+        newEvents.clear();
     }
 };

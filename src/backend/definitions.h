@@ -32,6 +32,7 @@ struct MachineSnap{
     int outputCount = 0;
     int breakdowns = 0;
     int lostProducts = 0;
+    std::vector<std::string> events;
 };
 
 struct ConveyorSnap{
@@ -39,6 +40,7 @@ struct ConveyorSnap{
     std::string name = "";
     int load  = 0;
     int totalCapacity = 0; 
+    std::vector<std::string> events;
 };
 
 struct FactoryStats{

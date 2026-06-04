@@ -19,8 +19,9 @@ protected:
     int breakChance;
     int totalBreakdowns = 0;
     int lostProducts = 0;
-    std::unique_ptr<Product> currentProduct;
-    std::unique_ptr<Product> finishedProduct = nullptr;
+    std::shared_ptr<Product> currentProduct;
+    std::shared_ptr<Product> finishedProduct = nullptr;
+    std::vector<std::string> newEvents;
 
     void forceBreak(int currentTick){
         if(state == BROKEN || state == FIXING) return;
@@ -32,6 +33,8 @@ protected:
         progress = 0;
         currentProduct = nullptr;
         lostProducts++;
+
+        newEvents.push_back("BROKEN");
     }
 
     void forceRepair(){
@@ -39,6 +42,8 @@ protected:
         health = 100.0;
         brokenAt = 0;
         progress = 0;
+
+        newEvents.push_back("REPAIRED");
     }
 
     void tickHealth(){
@@ -62,12 +67,14 @@ protected:
 public:
     Machine(int i, std::string n, int totalT, int breakCh) : SimulationObject(i,n), state(IDLE), health(100), progress(0), totalTime(totalT), outputCount(0), brokenAt(0), breakChance(breakCh) {}
     virtual ~Machine() = 0;
-    virtual void changeProductState(Product* p) = 0;
+    virtual void changeProductState(std::shared_ptr<Product> p) = 0;
 
-    bool receive(std::unique_ptr<Product> p){
+    bool receive(std::shared_ptr<Product> p){
         if(state != IDLE) return false;
-        currentProduct = std::move(p);
+        currentProduct = p;
         state = WORKING;
+
+        newEvents.push_back("started P" + std::to_string(p->getId()));
         return true;
     }
 
@@ -88,23 +95,25 @@ public:
             }
             
             if(progress >= totalTime){
-                changeProductState(currentProduct.get());
-                finishedProduct = std::move(currentProduct);
+                int pid = currentProduct->getId();
+                changeProductState(currentProduct);
+                finishedProduct = currentProduct;
                 outputCount++;
 
                 if(next != nullptr){
-                    if(!next->receive(std::move(finishedProduct))){
+                    if(!next->receive(finishedProduct)){
                         lostProducts++;
                     }
                 }
                 finishedProduct = nullptr;
                 progress = 0;
                 state = IDLE;
+                newEvents.push_back("finished good P" + std::to_string(pid));
             }
         }
     }
 
-    MachineSnap getSnapshot() const{
+    MachineSnap getSnapshot(){
         MachineSnap ms;
         ms.id  = id;
         ms.name = name;
@@ -115,7 +124,12 @@ public:
         ms.outputCount = outputCount;
         ms.breakdowns = totalBreakdowns;
         ms.lostProducts = lostProducts;
+        ms.events = newEvents;
         return ms;
+    }
+
+    void clearEvents(){
+        newEvents.clear();
     }
 
     void applyCmd(MachineCmd& cmd, int currentTick){
@@ -132,7 +146,7 @@ inline Machine::~Machine() {}
 
 class Shape : public Machine{
     private:
-    void changeProductState(Product* p) override{
+    void changeProductState(std::shared_ptr<Product> p) override{
         if(p) p->setState(SHAPED);
     }
     public:
@@ -145,7 +159,7 @@ class Shape : public Machine{
 
 class Fryer : public Machine{
     private:
-    void changeProductState(Product* p) override{
+    void changeProductState(std::shared_ptr<Product> p) override{
         if(p) p->setState(FRIED);
     }
     public:
@@ -158,7 +172,7 @@ class Fryer : public Machine{
 
 class Glazer : public Machine{
     private:
-    void changeProductState(Product* p) override{
+    void changeProductState(std::shared_ptr<Product> p) override{
         if(p) p->setState(GLAZED);
     }
     public:

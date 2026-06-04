@@ -12,40 +12,48 @@ class Factory{
     int lostProducts = 0;
     int speed = 1;
     Conveyor* entry = nullptr;
-    Glazer* lastmachine = nullptr;
-    std::vector<std::unique_ptr<SimulationObject>> simulationObjects;
-    std::vector<Machine*> machines; 
-    std::vector<Conveyor*> conveyors;
+    Shape* shapeMachine = nullptr;
+    Fryer* fryerMachine = nullptr;
+    Glazer* glazerMachine = nullptr;
+    Machine* lastMachine = nullptr;
+    std::vector<std::shared_ptr<SimulationObject>> simulationObjects;
+    std::vector<std::shared_ptr<Machine>> machines; 
+    std::vector<std::shared_ptr<Conveyor>> conveyors;
     Scenario currentScenario = NORMAL;
+    std::vector<std::string> events;
 
     void donutCreation(){
-        auto p = std::make_unique<Product>(pid);
+        auto p = std::make_shared<Product>(pid);
         pid++;
 
-        if(!entry->receive(std::move(p))){
+        if(!entry->receive(p)){
             lostProducts++;
         }
     }
 
     void build(){
-        auto shape = std::make_unique<Shape>();
-        auto fryer = std::make_unique<Fryer>();
-        auto glazer = std::make_unique<Glazer>();
+        auto shape = std::make_shared<Shape>();
+        auto fryer = std::make_shared<Fryer>();
+        auto glazer = std::make_shared<Glazer>();
 
-        auto c0 = std::make_unique<Conveyor>(1,"Conveyor0", 6);
-        auto c1 = std::make_unique<Conveyor>(2,"Conveyor1", 6);
-        auto c2 = std::make_unique<Conveyor>(3,"Conveyor2", 6);
+        auto c0 = std::make_shared<Conveyor>(1,"Conveyor0", 6);
+        auto c1 = std::make_shared<Conveyor>(2,"Conveyor1", 6);
+        auto c2 = std::make_shared<Conveyor>(3,"Conveyor2", 6);
 
         entry = c0.get();
-        lastmachine = glazer.get();
+        shapeMachine = shape.get();
+        fryerMachine = fryer.get();
+        glazerMachine = glazer.get();
 
-        machines.push_back(shape.get());
-        machines.push_back(fryer.get());
-        machines.push_back(glazer.get());
+        machines.push_back(shape);
+        machines.push_back(fryer);
+        machines.push_back(glazer);
 
-        conveyors.push_back(c0.get());
-        conveyors.push_back(c1.get());
-        conveyors.push_back(c2.get());
+        lastMachine = machines.back().get();
+
+        conveyors.push_back(c0);
+        conveyors.push_back(c1);
+        conveyors.push_back(c2);
 
         c0->setNext(shape.get());
         shape->setNext(c1.get());
@@ -54,31 +62,31 @@ class Factory{
         c2->setNext(glazer.get());
         glazer->setNext(nullptr);
 
-        simulationObjects.push_back(std::move(glazer));
-        simulationObjects.push_back(std::move(c2));
-        simulationObjects.push_back(std::move(fryer));
-        simulationObjects.push_back(std::move(c1));
-        simulationObjects.push_back(std::move(shape));
-        simulationObjects.push_back(std::move(c0));
+        simulationObjects.push_back(glazer);
+        simulationObjects.push_back(c2);
+        simulationObjects.push_back(fryer);
+        simulationObjects.push_back(c1);
+        simulationObjects.push_back(shape);
+        simulationObjects.push_back(c0);
     }
 
     void applyScenario(Scenario s){
         if(s == BOTTLENECK){
-            machines[1]->setTotalTime(12);
+            fryerMachine->setTotalTime(12);
         }
         else if(s == BREAKDOWNS){
-            machines[0]->setBreakChance(6);
-            machines[1]->setBreakChance(6);
-            machines[2]->setBreakChance(6);
+            shapeMachine->setBreakChance(6);
+            fryerMachine->setBreakChance(6);
+            glazerMachine->setBreakChance(6);
         }
         else if(s == NORMAL){
-            machines[1]->setTotalTime(5);
-            machines[0]->setBreakChance(1);
-            machines[1]->setBreakChance(2);
-            machines[2]->setBreakChance(1);
+            fryerMachine->setTotalTime(5);
+            shapeMachine->setBreakChance(1);
+            fryerMachine->setBreakChance(2);
+            glazerMachine->setBreakChance(1);
         }
         else if(s == OVERFLOW_SCENARIO){
-            machines[1]->setTotalTime(10);
+            fryerMachine->setTotalTime(10);
         }
     }
 
@@ -89,6 +97,12 @@ class Factory{
         simulationObjects.clear();
         machines.clear();
         conveyors.clear();
+        events.clear();
+        entry = nullptr;
+        lastMachine = nullptr;
+        shapeMachine = nullptr;
+        fryerMachine = nullptr;
+        glazerMachine = nullptr;
         currentTick = 0;
         lostProducts = 0;
         pid = 1;
@@ -106,13 +120,30 @@ class Factory{
         for(auto& obj : simulationObjects){
             obj->update(currentTick);
         }
+
+        for(auto& m : machines){
+            auto snapshot = m->getSnapshot();
+            for(auto& ev : snapshot.events){
+                events.push_back("["+std::to_string(currentTick)+"] "+m->getName()+" "+ev);
+            }
+            m->clearEvents(); 
+        }
+        
+
+        for(auto& c : conveyors){
+            auto snapshot = c->getSnapshot();
+            for(auto& ev : snapshot.events){
+                events.push_back("["+std::to_string(currentTick)+"] "+c->getName()+" "+ev);
+            }
+            c->clearEvents();
+        }
     }
 
     void applyCmd(SimulationCmd& cmd){
         if(cmd.start) running = true;
         if(cmd.pause) running = false;
         if(cmd.reset) reset();
-        speed = cmd.speed;
+        if(cmd.speed > 0) speed = cmd.speed;
         currentScenario = cmd.scenario;
         applyScenario(currentScenario);
 
@@ -124,7 +155,7 @@ class Factory{
         }
     }
 
-    std::vector<MachineSnap> getSnapshots() const{
+    std::vector<MachineSnap> getSnapshots(){
         std::vector<MachineSnap> snapshots;
         for(auto& m : machines){
             snapshots.push_back(m->getSnapshot());
@@ -132,7 +163,7 @@ class Factory{
         return snapshots;
     }
 
-    std::vector<ConveyorSnap> getConveyorSnapshots() const{
+    std::vector<ConveyorSnap> getConveyorSnapshots(){
         std::vector<ConveyorSnap> snapshots;
         for(auto& c : conveyors){
             snapshots.push_back(c->getSnapshot());
@@ -140,9 +171,9 @@ class Factory{
         return snapshots;
     }
 
-    FactoryStats getStats() const{
+    FactoryStats getStats(){
         FactoryStats fs;
-        fs.finished = lastmachine->getSnapshot().outputCount;
+        fs.finished = lastMachine->getSnapshot().outputCount;
         fs.currentTick = currentTick;
 
         int breakdownsSum = 0;
@@ -158,6 +189,10 @@ class Factory{
         fs.inProgress = totalCreated - fs.finished - fs.totalProductLost;
 
         return fs;
+    }
+    
+    std::vector<std::string> getEventLogs(){
+        return events;
     }
 };
 

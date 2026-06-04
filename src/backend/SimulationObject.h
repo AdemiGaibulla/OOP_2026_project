@@ -14,7 +14,7 @@ class SimulationObject{
 
     virtual ~SimulationObject() {}
     virtual void update(int tick) = 0;
-    virtual bool receive(std::unique_ptr<Product> p) = 0;
+    virtual bool receive(std::shared_ptr<Product> p) = 0;
 
     void setNext(SimulationObject* next){
         this->next = next;
