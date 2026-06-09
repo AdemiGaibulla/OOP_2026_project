@@ -1,5 +1,4 @@
 #include "backend/Factory.h"
-#include "backend/definitions.h"
 
 int main() {
     Factory factory;
@@ -15,6 +14,7 @@ int main() {
         auto machineSnaps = factory.getSnapshots();
         auto conveyorSnaps = factory.getConveyorSnapshots();
         auto stats = factory.getStats();
+        auto eventLog = factory.getEventLogs();
 
         factory.applyCmd(simCmd);
         factory.applyMachineCmd(machineCmd); 
