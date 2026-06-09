@@ -1,71 +1,47 @@
 #pragma once
 #include "SimulationObject.h"
-#include "definitions.h"
-#include "Product.h"
-#include <string>
-#include <queue>
-#include <memory>
-#include <random>
+#include "Health.h"
+#include "EventLog.h"
 
 
 class Machine : public SimulationObject{
 protected:
-    MachineState state;
-    double health;
-    int progress;
+    MachineState state = IDLE;
+    int progress = 0;
     int totalTime;
-    int outputCount;
-    int brokenAt = 0;
-    int breakChance;
-    int totalBreakdowns = 0;
+    int outputCount = 0;
     int lostProducts = 0;
+    Health health;
+    EventLog event;
     std::shared_ptr<Product> currentProduct;
     std::shared_ptr<Product> finishedProduct = nullptr;
-    std::vector<std::string> newEvents;
 
     void forceBreak(int currentTick){
         if(state == BROKEN || state == FIXING) return;
         state = BROKEN;
-        totalBreakdowns++;
-        if(health - 30.0 >= 0) health -= 30.0;
-        else health = 0;
-        brokenAt = currentTick;
+        health.damage(currentTick);
         progress = 0;
         currentProduct = nullptr;
         lostProducts++;
 
-        newEvents.push_back("BROKEN");
+        event.log("BROKEN");
     }
 
     void forceRepair(){
         state = IDLE;
-        health = 100.0;
-        brokenAt = 0;
+        health.repair();
         progress = 0;
 
-        newEvents.push_back("REPAIRED");
-    }
-
-    void tickHealth(){
-        if(state != WORKING) return;
-        if(health - 0.5 >= 0) health -= 0.5;
-        else health = 0.0;
+        event.log("REPAIRED");
     }
 
     void autoRepair(int currentTick){
         if(state == BROKEN) state = FIXING;
-        if(currentTick - brokenAt >= 10) forceRepair();
-    }
-
-    int getRandomValue() {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        static std::uniform_int_distribution<> dist(0, 100);
-        return dist(gen);
+        if(health.completeRepair(currentTick)) forceRepair();
     }
 
 public:
-    Machine(int i, std::string n, int totalT, int breakCh) : SimulationObject(i,n), state(IDLE), health(100), progress(0), totalTime(totalT), outputCount(0), brokenAt(0), breakChance(breakCh) {}
+    Machine(int i, std::string n, int totalT, int breakCh) : SimulationObject(i,n), totalTime(totalT), health(breakCh) {}
     virtual ~Machine() = 0;
     virtual void changeProductState(std::shared_ptr<Product> p) = 0;
 
@@ -74,22 +50,22 @@ public:
         currentProduct = p;
         state = WORKING;
 
-        newEvents.push_back("started P" + std::to_string(p->getId()));
+        event.log("started P" + std::to_string(p->getId()));
         return true;
     }
 
     void update(int tick) override{
         if(state == BROKEN || state == FIXING){
-            if(tick - brokenAt >= 5) autoRepair(tick);
+            if(health.startFixing(tick)) autoRepair(tick);
         }
         else if(state == IDLE){
             progress = 0;
         }
         else if(state == WORKING){
-            tickHealth();
+            health.tickHealth();
             progress++;
 
-            if(getRandomValue() < breakChance){
+            if(health.shouldBreak()){
                 forceBreak(tick);
                 return;
             }
@@ -108,7 +84,7 @@ public:
                 finishedProduct = nullptr;
                 progress = 0;
                 state = IDLE;
-                newEvents.push_back("finished good P" + std::to_string(pid));
+                event.log("finished good P" + std::to_string(pid));
             }
         }
     }
@@ -118,19 +94,17 @@ public:
         ms.id  = id;
         ms.name = name;
         ms.state = state;
-        ms.health = health;
+        ms.health = health.getHealth();
         ms.progress = progress;
         ms.totalTime = totalTime;
         ms.outputCount = outputCount;
-        ms.breakdowns = totalBreakdowns;
+        ms.breakdowns = health.getBreakdowns();
         ms.lostProducts = lostProducts;
-        ms.events = newEvents;
+        ms.events = event.getevents();
         return ms;
     }
 
-    void clearEvents(){
-        newEvents.clear();
-    }
+    void clearEvents() { event.clear(); }
 
     void applyCmd(MachineCmd& cmd, int currentTick){
         if(cmd.id != id) return;
@@ -138,47 +112,8 @@ public:
         if (cmd.forceRepair && (state == BROKEN || state == FIXING)) forceRepair();
     }
 
-    void setBreakChance(int chance) { breakChance = chance; }
+    void setBreakChance(int chance) { health.setBreakChance(chance); }
     void setTotalTime(int time) { totalTime = time; }
 };
 
 inline Machine::~Machine() {}
-
-class Shape : public Machine{
-    private:
-    void changeProductState(std::shared_ptr<Product> p) override{
-        if(p) p->setState(SHAPED);
-    }
-    public:
-    Shape() : Machine(1, "Shape", 3, 1) {}
-
-    void update(int tick) override {
-        Machine::update(tick);
-    }
-};
-
-class Fryer : public Machine{
-    private:
-    void changeProductState(std::shared_ptr<Product> p) override{
-        if(p) p->setState(FRIED);
-    }
-    public:
-    Fryer() : Machine(2, "Fryer", 5, 2) {}
-
-    void update(int tick) override {
-        Machine::update(tick);
-    }
-};
-
-class Glazer : public Machine{
-    private:
-    void changeProductState(std::shared_ptr<Product> p) override{
-        if(p) p->setState(GLAZED);
-    }
-    public:
-    Glazer() : Machine(3, "Glazer", 4, 1) {}
-
-    void update(int tick) override {
-        Machine::update(tick);
-    }
-};

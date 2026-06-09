@@ -1,35 +1,24 @@
+#pragma once
 #include <vector>
-#include <memory>
-#include "Machine.h"
+#include "Shape.h"
+#include "Fryer.h"
+#include "Glazer.h" 
 #include "Conveyor.h"
 
 
 class Factory{
-    private:
+private:
     bool running = false;
     int currentTick = 0;
     int pid = 1;
     int lostProducts = 0;
     int speed = 1;
     Conveyor* entry = nullptr;
-    Shape* shapeMachine = nullptr;
-    Fryer* fryerMachine = nullptr;
-    Glazer* glazerMachine = nullptr;
-    Machine* lastMachine = nullptr;
     std::vector<std::shared_ptr<SimulationObject>> simulationObjects;
     std::vector<std::shared_ptr<Machine>> machines; 
     std::vector<std::shared_ptr<Conveyor>> conveyors;
     Scenario currentScenario = NORMAL;
     std::vector<std::string> events;
-
-    void donutCreation(){
-        auto p = std::make_shared<Product>(pid);
-        pid++;
-
-        if(!entry->receive(p)){
-            lostProducts++;
-        }
-    }
 
     void build(){
         auto shape = std::make_shared<Shape>();
@@ -41,15 +30,10 @@ class Factory{
         auto c2 = std::make_shared<Conveyor>(3,"Conveyor2", 6);
 
         entry = c0.get();
-        shapeMachine = shape.get();
-        fryerMachine = fryer.get();
-        glazerMachine = glazer.get();
 
         machines.push_back(shape);
         machines.push_back(fryer);
         machines.push_back(glazer);
-
-        lastMachine = machines.back().get();
 
         conveyors.push_back(c0);
         conveyors.push_back(c1);
@@ -70,49 +54,7 @@ class Factory{
         simulationObjects.push_back(c0);
     }
 
-    void applyScenario(Scenario s){
-        if(s == BOTTLENECK){
-            fryerMachine->setTotalTime(12);
-        }
-        else if(s == BREAKDOWNS){
-            shapeMachine->setBreakChance(6);
-            fryerMachine->setBreakChance(6);
-            glazerMachine->setBreakChance(6);
-        }
-        else if(s == NORMAL){
-            fryerMachine->setTotalTime(5);
-            shapeMachine->setBreakChance(1);
-            fryerMachine->setBreakChance(2);
-            glazerMachine->setBreakChance(1);
-        }
-        else if(s == OVERFLOW_SCENARIO){
-            fryerMachine->setTotalTime(10);
-        }
-    }
-
-    public:
-    Factory (){ build(); }
-
-    void reset(){
-        simulationObjects.clear();
-        machines.clear();
-        conveyors.clear();
-        events.clear();
-        entry = nullptr;
-        lastMachine = nullptr;
-        shapeMachine = nullptr;
-        fryerMachine = nullptr;
-        glazerMachine = nullptr;
-        currentTick = 0;
-        lostProducts = 0;
-        pid = 1;
-        running = false;
-        build();
-        applyScenario(currentScenario);
-    }
-
-    void update(){
-        if(!running) return;
+    void tick(){
         currentTick++;
 
         if(currentTick % 4 == 0) donutCreation();
@@ -128,7 +70,6 @@ class Factory{
             }
             m->clearEvents(); 
         }
-        
 
         for(auto& c : conveyors){
             auto snapshot = c->getSnapshot();
@@ -137,6 +78,50 @@ class Factory{
             }
             c->clearEvents();
         }
+    } 
+    
+    void donutCreation(){
+        auto p = std::make_shared<Product>(pid);
+        pid++;
+
+        if(!entry->receive(p)){
+            lostProducts++;
+        }
+    }
+
+    void applyScenario(Scenario s){
+        if(s == BOTTLENECK){ if (auto* m = findMachine("Fryer")) m->setTotalTime(12); }
+        else if(s == BREAKDOWNS){ for (auto& m : machines) m->setBreakChance(6); }
+        else if(s == NORMAL){ if (auto* m = findMachine("Fryer")) m->setTotalTime(5); }
+        else if(s == OVERFLOW_SCENARIO){ if (auto* m = findMachine("Fryer")) m->setTotalTime(10); }
+    }
+    
+    Machine* findMachine(const std::string& name) {
+        for (auto& m : machines)
+        if (m->getName() == name) return m.get();
+        return nullptr;
+    }
+
+    public:
+    Factory (){ build(); }
+
+    void reset(){
+        simulationObjects.clear();
+        machines.clear();
+        conveyors.clear();
+        events.clear();
+        entry = nullptr;
+        currentTick = 0;
+        lostProducts = 0;
+        pid = 1;
+        running = false;
+        build();
+        applyScenario(currentScenario);
+    }
+
+    void update(){
+        if(!running) return;
+        for(int i = 0; i < speed; ++i) tick();
     }
 
     void applyCmd(SimulationCmd& cmd){
@@ -144,9 +129,10 @@ class Factory{
         if(cmd.pause) running = false;
         if(cmd.reset) reset();
         if(cmd.speed > 0) speed = cmd.speed;
-        currentScenario = cmd.scenario;
-        applyScenario(currentScenario);
-
+        if (cmd.scenario != currentScenario) {
+            currentScenario = cmd.scenario;
+            applyScenario(currentScenario);
+        }
     }
 
     void applyMachineCmd(MachineCmd& cmd) {
@@ -173,7 +159,7 @@ class Factory{
 
     FactoryStats getStats(){
         FactoryStats fs;
-        fs.finished = lastMachine->getSnapshot().outputCount;
+        fs.finished = machines.back()->getSnapshot().outputCount;
         fs.currentTick = currentTick;
 
         int breakdownsSum = 0;
@@ -192,7 +178,8 @@ class Factory{
     }
     
     std::vector<std::string> getEventLogs(){
-        return events;
+        auto copy = events;
+        events.clear();
+        return copy;
     }
 };
-
