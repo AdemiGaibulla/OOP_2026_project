@@ -1,6 +1,5 @@
 #pragma once
-#include <vector>
-#include "Builder.h"
+#include "FactorySetup.h"
 
 
 class Factory{
@@ -12,59 +11,75 @@ private:
     int speed = 1;
     std::vector<std::string> events;
     Scenario currentScenario = NORMAL;
-    Builder builder;
+    FactorySetup setup;
 
     void tick(){
-        currentTick++;
-
-        if(currentTick % 4 == 0) donutCreation();
-
-        for(auto& obj : builder.getSimulationObjects()){
-            obj->update(currentTick);
-        }
-
-        for(auto& m : builder.getMachines()){
-            auto snapshot = m->getSnapshot();
-            for(auto& ev : snapshot.events){
-                events.push_back("["+std::to_string(currentTick)+"] "+m->getName()+" "+ev);
+        try{
+            currentTick++;
+            
+            if(currentTick % 4 == 0) donutCreation();
+            
+            for(auto& obj : setup.getSimulationObjects()){
+                obj->update(currentTick);
             }
-            m->clearEvents(); 
-        }
-
-        for(auto& c : builder.getConveyors()){
-            auto snapshot = c->getSnapshot();
-            for(auto& ev : snapshot.events){
-                events.push_back("["+std::to_string(currentTick)+"] "+c->getName()+" "+ev);
+            
+            for(auto& m : setup.getMachines()){
+                auto snapshot = m->getSnapshot();
+                for(auto& ev : snapshot.events){
+                    events.push_back("["+std::to_string(currentTick)+"] "+m->getName()+" "+ev);
+                }
+                m->clearEvents(); 
             }
-            c->clearEvents();
+            
+            for(auto& c : setup.getConveyors()){
+                auto snapshot = c->getSnapshot();
+                for(auto& ev : snapshot.events){
+                    events.push_back("["+std::to_string(currentTick)+"] "+c->getName()+" "+ev);
+                }
+                c->clearEvents();
+            }
         }
+        catch(const std::exception& e){
+             running = false;
+             throw std::runtime_error(std::string("Factory::tick: ") + e.what());
+            }
     } 
     
     void donutCreation(){
         auto p = std::make_shared<Product>(pid);
         pid++;
-
-        if(!builder.getConveyors()[0]->receive(p)){
+            
+        if(!setup.getConveyors().at(0)->receive(p)){
             lostProducts++;
         }
     }
 
     void applyScenario(Scenario s){
-        builder.getScenarios().at(s)->apply(builder.getMachines());
+        try{
+            setup.getScenarios().at(s)->apply(setup.getMachines());
+        }
+        catch(const std::exception& e){
+            throw std::runtime_error(std::string("Factory::applyScenario: ") + e.what());
+        }
     }
 
     public:
     Factory () = default;
 
     void reset(){
-        builder.build();
-    
-        applyScenario(currentScenario);
-        events.clear();
-        currentTick = 0;
-        lostProducts = 0;
-        pid = 1;
-        running = false;
+        try{
+            setup.build();
+            
+            applyScenario(currentScenario);
+            events.clear();
+            currentTick = 0;
+            lostProducts = 0;
+            pid = 1;
+            running = false;
+        }
+        catch(const std::exception& e){
+            throw std::runtime_error(std::string("Factory::reset(): ") + e.what());
+        }
     }
 
     void update(){
@@ -84,14 +99,14 @@ private:
     }
 
     void applyMachineCmd(MachineCmd& cmd) {
-        for(auto& m : builder.getMachines()) {
+        for(auto& m : setup.getMachines()) {
             m->applyCmd(cmd, currentTick);
         }
     }
 
     std::vector<MachineSnap> getSnapshots(){
         std::vector<MachineSnap> snapshots;
-        for(auto& m : builder.getMachines()){
+        for(auto& m : setup.getMachines()){
             snapshots.push_back(m->getSnapshot());
         }
         return snapshots;
@@ -99,20 +114,24 @@ private:
 
     std::vector<ConveyorSnap> getConveyorSnapshots(){
         std::vector<ConveyorSnap> snapshots;
-        for(auto& c : builder.getConveyors()){
+        for(auto& c : setup.getConveyors()){
             snapshots.push_back(c->getSnapshot());
         }
         return snapshots;
     }
 
     FactoryStats getStats() const {
+        if(setup.getMachines().empty()){
+            throw std::runtime_error("Factory::getStats: machines is empty");
+        }
+
         FactoryStats fs;
-        fs.finished = builder.getMachines().back()->getSnapshot().outputCount;
+        fs.finished = setup.getMachines().back()->getSnapshot().outputCount;
         fs.currentTick = currentTick;
 
         int breakdownsSum = 0;
         int productLostSum = 0;
-        for(auto& m: builder.getMachines()){
+        for(auto& m: setup.getMachines()){
             breakdownsSum += m->getSnapshot().breakdowns;
             productLostSum += m->getSnapshot().lostProducts;
         }
