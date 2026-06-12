@@ -22,7 +22,7 @@ int main() {
         auto machineSnaps = factory.getSnapshots();
         auto conveyorSnaps = factory.getConveyorSnapshots();
         auto stats = factory.getStats();
-        auto eventLog = factory.getEventLogs();
+        auto eventLog = factory.takeEventLogs();
 
         factory.applyCmd(simCmd);
         factory.applyMachineCmd(machineCmd); 

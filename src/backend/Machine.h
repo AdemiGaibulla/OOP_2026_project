@@ -89,7 +89,7 @@ public:
         }
     }
 
-    MachineSnap getSnapshot(){
+    MachineSnap getSnapshot() const{
         MachineSnap ms;
         ms.id  = id;
         ms.name = name;
