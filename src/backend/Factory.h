@@ -10,7 +10,7 @@ private:
     int lostProducts = 0;
     int speed = 1;
     Scenario currentScenario = NORMAL;
-    std::shared_ptr<FactorySetup> setup;
+    FactorySetup setup;
 
     void tick(){
         try{
@@ -18,11 +18,11 @@ private:
             
             if(currentTick % 4 == 0) donutCreation();
             
-            for(auto& obj : setup->getSimulationObjects()){
+            for(auto& obj : setup.getSimulationObjects()){
                 obj->update(currentTick);
             }
             
-            setup->collectEvents(currentTick);
+            setup.collectEvents(currentTick);
         }
         catch(const std::exception& e){
              running = false;
@@ -34,15 +34,15 @@ private:
         auto p = std::make_shared<Product>(pid);
         pid++;
             
-        if(!setup->entryReceive(p)){
+        if(!setup.entryReceive(p)){
             lostProducts++;
         }
     }
 
     void reset(){
         try{
-            setup->build();
-            setup->applyScenario(currentScenario);
+            setup.build();
+            setup.applyScenario(currentScenario);
             currentTick = 0;
             lostProducts = 0;
             pid = 1;
@@ -54,7 +54,7 @@ private:
     }
 
     public:
-    Factory (){ setup = std::make_shared<FactorySetup>(); }
+    Factory (){}
 
     void update(){
         if(!running) return;
@@ -68,20 +68,20 @@ private:
         if(cmd.speed > 0) speed = cmd.speed;
         if (cmd.scenario != currentScenario) {
             currentScenario = cmd.scenario;
-            setup->applyScenario(currentScenario);
+            setup.applyScenario(currentScenario);
         }
     }
 
     void applyMachineCmd(MachineCmd& cmd) {
-        setup->applyMachineCmd(cmd, currentTick);
+        setup.applyMachineCmd(cmd, currentTick);
     }
 
-    std::vector<MachineSnap> getSnapshots() { return setup->getMachineSnapshots(); }
-    std::vector<ConveyorSnap> getConveyorSnapshots() { return setup->getConveyorSnapshots(); }
-    std::vector<std::string> takeEventLogs() { return setup->takeEventLogs(); }
+    std::vector<MachineSnap> getSnapshots() { return setup.getMachineSnapshots(); }
+    std::vector<ConveyorSnap> getConveyorSnapshots() { return setup.getConveyorSnapshots(); }
+    std::vector<std::string> takeEventLogs() { return setup.takeEventLogs(); }
 
     FactoryStats getStats() const {
-        auto machineSnaps = setup->getMachineSnapshots();
+        auto machineSnaps = setup.getMachineSnapshots();
 
         if(machineSnaps.empty()){
             throw std::runtime_error("Factory::getStats: machines is empty");
