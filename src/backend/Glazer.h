@@ -2,7 +2,7 @@
 #include "Machine.h"
 
 class Glazer : public Machine{
-private:
+protected:
     void changeProductState(std::shared_ptr<Product> p) override{
         if(p) p->setState(GLAZED);
     }

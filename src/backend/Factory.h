@@ -39,9 +39,6 @@ private:
         }
     }
 
-    public:
-    Factory (){ setup = std::make_shared<FactorySetup>(); }
-
     void reset(){
         try{
             setup->build();
@@ -55,6 +52,9 @@ private:
             throw std::runtime_error(std::string("Factory::reset(): ") + e.what());
         }
     }
+
+    public:
+    Factory (){ setup = std::make_shared<FactorySetup>(); }
 
     void update(){
         if(!running) return;

@@ -2,7 +2,7 @@
 #include "Machine.h"
 
 class Shape : public Machine{
-private:
+protected:
     void changeProductState(std::shared_ptr<Product> p) override{
         if(p) p->setState(SHAPED);
     }

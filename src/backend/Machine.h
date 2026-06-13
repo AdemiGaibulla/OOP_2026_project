@@ -41,10 +41,11 @@ protected:
         if(health.completeRepair(currentTick)) forceRepair();
     }
 
+    virtual void changeProductState(std::shared_ptr<Product> p) = 0;
+
 public:
     Machine(int i, std::string n, int totalT, int breakCh) : SimulationObject(i,n), totalTime(totalT), health(breakCh) {}
     virtual ~Machine() = 0;
-    virtual void changeProductState(std::shared_ptr<Product> p) = 0;
 
     bool receive(std::shared_ptr<Product> p){
         if(state != IDLE) return false;
