@@ -28,7 +28,7 @@ public:
         }
     }
 
-    ConveyorSnap getSnapshot(){
+    ConveyorSnap getSnapshot() const{
         ConveyorSnap cs;
         cs.id = id;
         cs.name = name;

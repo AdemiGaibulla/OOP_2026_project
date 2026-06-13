@@ -19,6 +19,7 @@ private:
     std::vector<std::shared_ptr<Machine>> machines;
     std::vector<std::shared_ptr<Conveyor>> conveyors;
     std::unordered_map<Scenario, std::shared_ptr<ScenarioApply>> scenarios;
+    EventLog events;
 
 public:
     FactorySetup() { build(); }
@@ -30,6 +31,8 @@ public:
             machines.clear();
             conveyors.clear();
             scenarios.clear();
+
+            events.clear();
 
             auto shape = std::make_shared<Shape>();
             auto fryer = std::make_shared<Fryer>();
@@ -72,12 +75,70 @@ public:
             machines.clear();
             conveyors.clear();
             scenarios.clear();
+            events.clear();
             throw std::runtime_error(std::string("FactorySetup::build(): ") + e.what());
         }
     }
 
+    void applyScenario(Scenario s){
+        try{
+            scenarios.at(s)->apply(machines);
+        }
+        catch(const std::exception& e){
+            throw std::runtime_error(std::string("Factory::applyScenario: ") + e.what());
+        }
+    }
+
+    void collectEvents(int currentTick){
+        for(auto& m : machines){
+                auto snapshot = m->getSnapshot();
+                for(auto& ev : snapshot.events){
+                    events.log("["+std::to_string(currentTick)+"] "+m->getName()+" "+ev);
+                }
+                m->clearEvents(); 
+            }
+            
+            for(auto& c : conveyors){
+                auto snapshot = c->getSnapshot();
+                for(auto& ev : snapshot.events){
+                    events.log("["+std::to_string(currentTick)+"] "+c->getName()+" "+ev);
+                }
+                c->clearEvents();
+            }
+    }
+
+    std::vector<std::string> takeEventLogs() {
+        auto copy = events.getevents();
+        events.clear();
+        return copy;
+    }
+
+    std::vector<MachineSnap> getMachineSnapshots() const {
+        std::vector<MachineSnap> snapshots;
+        for (const auto& m : machines) {
+            snapshots.push_back(m->getSnapshot());
+        }
+        return snapshots;
+    }
+
+    std::vector<ConveyorSnap> getConveyorSnapshots() const {
+        std::vector<ConveyorSnap> snapshots;
+        for (const auto& c : conveyors) {
+            snapshots.push_back(c->getSnapshot());
+        }
+        return snapshots;
+    }
+
+    bool entryReceive(std::shared_ptr<Product> p) {
+        if (conveyors.empty()) return false;
+        return conveyors.at(0)->receive(p);
+    }
+
+    void applyMachineCmd(MachineCmd& cmd, int currentTick) {
+        for (auto& m : machines) {
+            m->applyCmd(cmd, currentTick);
+        }
+    }
+
     const std::vector<std::shared_ptr<SimulationObject>> &getSimulationObjects() const { return simulationObjects; }
-    const std::vector<std::shared_ptr<Machine>> &getMachines() const { return machines; }
-    const std::vector<std::shared_ptr<Conveyor>> &getConveyors() const { return conveyors; }
-    const std::unordered_map<Scenario, std::shared_ptr<ScenarioApply>> &getScenarios() const { return scenarios; }
 };

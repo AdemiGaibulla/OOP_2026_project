@@ -2,6 +2,7 @@
 #include "SimulationObject.h"
 #include "Health.h"
 #include "EventLog.h"
+#include "Product.h"
 
 
 class Machine : public SimulationObject{
