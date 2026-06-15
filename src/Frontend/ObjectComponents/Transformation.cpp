@@ -47,5 +47,5 @@ void Transformation2::enableTrasform(){
 }
 
 void Transformation2::disableTransform(){
-    transformEnable=true;
+    transformEnable=false;
 }
